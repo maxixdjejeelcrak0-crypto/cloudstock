@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudStock · Inventario en la Nube</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #2b6cb0, #4299e1);
+      color: white;
+      padding: 30px 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    header h1 { font-size: 2rem; margin-bottom: 8px; }
+    header p { opacity: 0.9; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    h2 { color: #2b6cb0; margin-bottom: 15px; font-size: 1.3rem; }
+    form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+    input {
+      flex: 1;
+      min-width: 140px;
+      padding: 10px;
+      border: 2px solid #cbd5e0;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    input:focus { outline: none; border-color: #4299e1; }
+    button {
+      padding: 10px 18px;
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    button:hover { background: #2c5282; }
+    button.eliminar { background: #e53e3e; padding: 6px 12px; font-size: 0.85rem; }
+    button.eliminar:hover { background: #c53030; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    th { background: #edf2f7; color: #2d3748; font-size: 0.9rem; text-transform: uppercase; }
+    tr:hover { background: #f7fafc; }
+    .stock-bajo { color: #e53e3e; font-weight: bold; }
+    .stock-ok { color: #38a169; font-weight: bold; }
+    .total { font-weight: bold; color: #2b6cb0; }
+    #mensaje { padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; }
+    #mensaje.ok { background: #c6f6d5; color: #22543d; display: block; }
+    #mensaje.error { background: #fed7d7; color: #742a2a; display: block; }
+    footer { text-align: center; color: #718096; padding: 20px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>☁️ CloudStock</h1>
+      <p>Inventario en la Nube — Unidad I</p>
+      <p><strong>Autor:</strong> Tu Nombre Aquí</p>
+    </header>
+
+    <div class="card">
+      <h2>Agregar producto</h2>
+      <div id="mensaje"></div>
+      <form id="formProducto">
+        <input type="text" id="nombre" placeholder="Nombre del producto" required>
+        <input type="number" id="cantidad" placeholder="Cantidad" min="0" required>
+        <input type="number" id="precio" placeholder="Precio" min="0" step="0.01" required>
+        <button type="submit">Agregar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Inventario</h2>
+      <input type="text" id="filtro" placeholder="🔍 Filtrar por nombre..." style="width:100%; margin-bottom:15px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Precio</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tablaProductos"></tbody>
+      </table>
+      <p class="total" id="total" style="margin-top:15px;"></p>
+    </div>
+
+    <footer>
+      <p>CloudStock · Computación en la Nube · <span id="anio"></span></p>
+    </footer>
+  </div>
+
+  <script>
+    // ===== DATOS INICIALES =====
+    let productos = [
+      { id: 1, nombre: "Café", cantidad: 20, precio: 3500 },
+      { id: 2, nombre: "Leche", cantidad: 15, precio: 1200 },
+      { id: 3, nombre: "Azúcar", cantidad: 8, precio: 900 }
+    ];
+
+    // ===== CARGAR DESDE LOCALSTORAGE =====
+    function cargarDatos() {
+      const guardados = localStorage.getItem("cloudstock_productos");
+      if (guardados) {
+        try { productos = JSON.parse(guardados); } catch(e) { console.warn("Error al leer datos"); }
+      }
+    }
+
+    function guardarDatos() {
+      localStorage.setItem("cloudstock_productos", JSON.stringify(productos));
+    }
+
+    // ===== RENDERIZAR TABLA =====
+    function renderizar(filtro = "") {
+      const tbody = document.getElementById("tablaProductos");
+      tbody.innerHTML = "";
+      const filtroLower = filtro.toLowerCase();
+
+      const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(filtroLower));
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:#718096;'>No hay productos</td></tr>";
+      }
+
+      filtrados.forEach(p => {
+        const estado = p.cantidad < 10
+          ? "<span class='stock-bajo'>⚠ Stock bajo</span>"
+          : "<span class='stock-ok'>✔ OK</span>";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${p.nombre}</td>
+          <td>${p.cantidad}</td>
+          <td>$${p.precio.toLocaleString('es-CL')}</td>
+          <td>${estado}</td>
+          <td><button class="eliminar" onclick="eliminarProducto(${p.id})">Eliminar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const total = productos.reduce((sum, p) => sum + (p.cantidad * p.precio), 0);
+      document.getElementById("total").textContent = `Valor total del inventario: $${total.toLocaleString('es-CL')}`;
+    }
+
+    // ===== AGREGAR PRODUCTO =====
+    document.getElementById("formProducto").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const nombre = document.getElementById("nombre").value.trim();
+      const cantidad = parseInt(document.getElementById("cantidad").value);
+      const precio = parseFloat(document.getElementById("precio").value);
+      const msg = document.getElementById("mensaje");
+
+      if (!nombre || isNaN(cantidad) || isNaN(precio) || cantidad < 0 || precio < 0) {
+        msg.className = "error";
+        msg.textContent = "❌ Datos inválidos. Revisa los campos.";
+        return;
+      }
+
+      const nuevoId = productos.length > 0 ? Math.max(...productos.map(p => p.id)) + 1 : 1;
+      productos.push({ id: nuevoId, nombre, cantidad, precio });
+      guardarDatos();
+      renderizar(document.getElementById("filtro").value);
+      this.reset();
+
+      msg.className = "ok";
+      msg.textContent = `✅ Producto "${nombre}" agregado correctamente.`;
+      setTimeout(() => { msg.style.display = "none"; }, 3000);
+    });
+
+    // ===== ELIMINAR PRODUCTO =====
+    function eliminarProducto(id) {
+      if (!confirm("¿Eliminar este producto?")) return;
+      productos = productos.filter(p => p.id !== id);
+      guardarDatos();
+      renderizar(document.getElementById("filtro").value);
+    }
+
+    // ===== FILTRO =====
+    document.getElementById("filtro").addEventListener("input", function() {
+      renderizar(this.value);
+    });
+
+    // ===== INICIALIZAR =====
+    document.getElementById("anio").textContent = new Date().getFullYear();
+    cargarDatos();
+    renderizar();
+  </script>
+</body>
+</html>
